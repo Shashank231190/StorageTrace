@@ -39,6 +39,19 @@ $filter153 = @{
 }
 #endregion
 
+#region EventLogs
+[scriptblock]$copyEventLogs ={
+   $systemLogPath = "C:\Windows\System32\winevt\Logs\System.evtx"
+   $applicationLogPath = "C:\Windows\System32\winevt\Logs\Application.evtx"
+
+   copy-item -Path $systemLogPath -Destination $DefaultLogDir -Force
+   copy-item -Path $applicationLogPath -Destination $DefaultLogDir -Force
+
+}
+
+
+#endregion
+
 #region StorageTraces
 [ScriptBlock]$StorageTracesStart = { 
     
@@ -314,6 +327,7 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
         $logDirName = Get-Date -Format HH_mm_ss
         New-Item -Name $logDirName -ItemType dir -Path $DefaultLogDir"\"
+        .$copyEventLogs
         set-location -Path $DefaultLogDir
         Move-Item -Path $DefaultLogDir"\*.*" -Destination $DefaultLogDir"\"$logDirName 
     }
