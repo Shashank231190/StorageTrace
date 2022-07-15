@@ -101,6 +101,26 @@ $filter153 = @{
 }
 #endregion
 
+#region Perfmon
+[scriptblock]$perfmonStart = {
+    
+    "Perfmon"
+    $nameHost = hostname
+    $CounterName = $nameHost + "_MS"
+    logman.exe create counter $CounterName -o $DefaultLogDir"\Perfmon_$($nameHost).blg" -f bincirc -v mmddhhmm -max 1024 -c  "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Memory\*" "\SMB Client Shares(*)\*" "\SMB Server Shares(*)\*" "\Network Adapter(*)\*" "\iSCSI Request Processing Time(*)\*" "\Process(*)\*"  -si 00:00:01
+    logman.exe start $CounterName
+}
+
+[scriptblock]$perfmonStop = {
+
+    $nameHost = hostname
+    $CounterName = $nameHost + "_MS"
+    logman stop $CounterName
+    logman delete $counterName
+}
+
+#endregion
+
 #region JobStorageNetwork 
 
 $jobStorageNetwork = {
@@ -116,6 +136,15 @@ $jobStorageNetwork = {
     }
 
     [scriptblock]$NetworkTarceStop = { Netsh trace stop }
+
+ 
+    [scriptblock]$perfmonStop = {
+
+        $nameHost = hostname
+        $CounterName = $nameHost + "_MS"
+        logman stop $CounterName
+        logman delete $CounterName
+    }
     
     $eventCapTime = -1
     $start = (get-date).AddMinutes($eventCapTime)
@@ -134,6 +163,7 @@ $jobStorageNetwork = {
         $errorMessage = Get-WinEvent -FilterHashtable $filter153 -MaxEvents 1 -ErrorAction SilentlyContinue
         if ($errorMessage) {
             .$StorageTracesStop
+            .$perfmonStop
             .$NetworkTarceStop
             Write-Host -ForegroundColor yellow "Storage & network traces collected."
             break;
@@ -143,8 +173,6 @@ $jobStorageNetwork = {
 }#JobEnd
 
 #endregion
-
-
 
 #region JobXperf
 
@@ -185,14 +213,16 @@ $jobXperf = {
 
 #region iSCSiData
 
-function get-iSCSIData($LogPath,$ToolLocation) {
+function get-iSCSIData($LogPath, $ToolLocation) {
 
+    #region try
     try {
 
         Get-ChildItem $LogPath -ErrorAction Stop
         Get-ChildItem $ToolLocation -ErrorAction stop
         Write-Host -ForegroundColor yellow "Starting Traces"
         .$StorageTracesStart
+        .$perfmonStart
         .$NetworkTarceStart
         .$XperfStart
         
@@ -243,12 +273,12 @@ function get-iSCSIData($LogPath,$ToolLocation) {
 
         }while ($command -ne 2)
 
-        @{StorageJob = Receive-Job -job $jobSN
-            XperfJob = Receive-Job -job $jobX
+        @{StorageJob        = Receive-Job -job $jobSN
+            XperfJob        = Receive-Job -job $jobX
             StoragaJobState = (get-job -id $jobSN.id).State
-            XperfJobState =  (get-job -id $jobX.id).State
+            XperfJobState   = (get-job -id $jobX.id).State
              
-          } | export-clixml -path $DefaultLogDir"\diag.xml"
+        } | export-clixml -path $DefaultLogDir"\diag.xml"
 
           
         receive-job -job  $jobSN
@@ -259,6 +289,9 @@ function get-iSCSIData($LogPath,$ToolLocation) {
         
 
     }
+    #endregion
+
+    #region catch
     catch {
 
 
@@ -268,9 +301,14 @@ function get-iSCSIData($LogPath,$ToolLocation) {
         .$StorageTracesStop
         .$NetworkTarceStop
         .$XperfStop
+        .$perfmonStop
         get-job | remove-job -force
 
     }
+    #endregion
+
+
+    #region finally
 
     finally {
 
@@ -279,6 +317,8 @@ function get-iSCSIData($LogPath,$ToolLocation) {
         set-location -Path $DefaultLogDir
         Move-Item -Path $DefaultLogDir"\*.*" -Destination $DefaultLogDir"\"$logDirName 
     }
+
+    #endregion
 
   
 
