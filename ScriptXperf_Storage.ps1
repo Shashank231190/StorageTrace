@@ -74,13 +74,12 @@ $filter153 = @{
      
     "Network Trace"
     $nameHost = hostname
-    $traceName = $nameHost + ".etl"
+    $traceName = "NetworkTrace_" + $nameHost + ".etl"
     netsh trace start capture=yes maxsize=2048 filemode=circular overwrite=yes report=no tracefile= $DefaultLogDir"\$traceName"
 }
 
 [scriptblock]$NetworkTarceStop =
-{ "Xperf Stop" 
-    Netsh trace stop }
+{ Netsh trace stop }
 
 #endregion
 
@@ -97,7 +96,7 @@ $filter153 = @{
 
 [scriptblock]$XperfStop = {
     Set-Location -Path $xperfToolLocation
-    .\Xperf -d $DefaultLogDir"\WaitAnalysis.ETL"
+    .\Xperf -d $DefaultLogDir"\Xperf_WaitAnalysis.ETL"
 
 }
 #endregion
@@ -157,7 +156,7 @@ $jobXperf = {
     $xperfToolLocation = "C:\Toolkit"
     [scriptblock]$XperfStop = {
         Set-Location -Path $xperfToolLocation
-        .\Xperf -d c:\Logs\WaitAnalysis.ETL
+        .\Xperf -d c:\Logs\Xperf_WaitAnalysis.ETL
     
     }
 
