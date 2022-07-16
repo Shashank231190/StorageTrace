@@ -7,6 +7,7 @@ This will capture
  .iSCSI trace
  .MPIO/DSM trace
  .System.evtx
+ .Application.evtx
 #>
 
 
@@ -88,7 +89,7 @@ $filter153 = @{
     "Network Trace"
     $nameHost = hostname
     $traceName = "NetworkTrace_" + $nameHost + ".etl"
-    netsh trace start capture=yes maxsize=2048 filemode=circular overwrite=yes report=no tracefile= $DefaultLogDir"\$traceName"
+    netsh trace start capture=yes maxsize=2048 filemode=circular overwrite=yes report=disabled tracefile= $DefaultLogDir"\$traceName"
 }
 
 [scriptblock]$NetworkTarceStop =
@@ -224,15 +225,15 @@ $jobXperf = {
 
 #endregion
 
-#region iSCSiData
+#region FunctioniSCSiData
 
 function get-iSCSIData($LogPath, $ToolLocation) {
 
     #region try
     try {
 
-        Get-ChildItem $LogPath -ErrorAction Stop
-        Get-ChildItem $ToolLocation -ErrorAction stop
+       $checkLogPath = Get-ChildItem $LogPath -ErrorAction Stop
+       $checkToolLocation =Get-ChildItem $ToolLocation -ErrorAction stop
         Write-Host -ForegroundColor yellow "Starting Traces"
         .$StorageTracesStart
         .$perfmonStart
