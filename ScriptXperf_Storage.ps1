@@ -327,6 +327,8 @@ function get-iSCSIData($LogPath, $ToolLocation) {
     finally {
 
         $logDirName = Get-Date -Format HH_mm_ss
+        $nameHost = HOSTNAME
+        $logDirName = $logDirName +"_"+ $nameHost
         New-Item -Name $logDirName -ItemType dir -Path $DefaultLogDir"\"
         .$copyEventLogs
         set-location -Path $DefaultLogDir
