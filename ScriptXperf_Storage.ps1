@@ -15,29 +15,23 @@ This will capture
 $DefaultDrive = "c:\"
 $logDir = "Logs"
 $DefaultLogDir = $DefaultDrive + $logDir
+$xperfToolLocation = "C:\Toolkit"
 if (!(test-path -path $DefaultLogDir)) {
     New-Item -Name $logDir -ItemType Directory -path $DefaultDrive -ErrorAction Stop
 
 }
 
-$xperfToolLocation = "C:\Toolkit"
+
 
 #endregion
 
 #region Filter
+$EventLogName = "System"
+$EventProviderName = "disk"
+$EventLevel = "3"
+$EventID = "153"
+$EventEntryType = "Warning"
 
-$eventCapTime = -1
-$start = (get-date).AddMinutes($eventCapTime)
-
-$filter153 = @{
-
-    LogName      = "System"
-    ProviderName = "disk"
-    StartTime    = $start 
-    Level        = 3
-    ID           = 153
-  
-}
 #endregion
 
 #region EventLogs
@@ -139,6 +133,18 @@ $filter153 = @{
 
 $jobStorageNetwork = {
 
+    param($LogName, $ProviderName, $Level, $ID)    
+
+    $filter = @{
+
+        LogName      = $LogName
+        ProviderName = $ProviderName
+        StartTime    = (Get-Date).AddMinutes(-1)
+        Level        = $Level
+        ID           = $ID
+      
+    }
+
     [ScriptBlock]$StorageTracesStop = {
 
         logman stop "storport" -ets
@@ -159,22 +165,9 @@ $jobStorageNetwork = {
         logman stop $CounterName
         logman delete $CounterName
     }
-    
-    $eventCapTime = -1
-    $start = (get-date).AddMinutes($eventCapTime)
-
-    $filter153 = @{
-
-        LogName      = "System"
-        ProviderName = "disk"
-        StartTime    = $start 
-        Level        = 3
-        ID           = 153
-      
-    }
 
     while (1) {
-        $errorMessage = Get-WinEvent -FilterHashtable $filter153 -MaxEvents 1 -ErrorAction SilentlyContinue
+        $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
         if ($errorMessage) {
             .$StorageTracesStop
             .$perfmonStop
@@ -193,27 +186,33 @@ $jobStorageNetwork = {
 $jobXperf = {
 
 
-    $eventCapTime = -1
-    $start = (get-date).AddMinutes($eventCapTime)
-    $xperfToolLocation = "C:\Toolkit"
-    [scriptblock]$XperfStop = {
-        Set-Location -Path $xperfToolLocation
-        .\Xperf -d c:\Logs\Xperf_WaitAnalysis.ETL
-    
-    }
+    param($LogName, $ProviderName, $Level, $ID)
 
-    $filter153 = @{
+    $filter = @{
 
-        LogName      = "System"
-        ProviderName = "disk"
-        StartTime    = $start 
-        Level        = 3
-        ID           = 153
+        LogName      = $LogName
+        ProviderName = $ProviderName
+        StartTime    = (get-date).AddMinutes(-1)
+        Level        = $Level
+        ID           = $ID
       
     }
 
+
+    $DefaultDrive = "c:\"
+    $logDir = "Logs"
+    $DefaultLogDir = $DefaultDrive + $logDir
+    $xperfToolLocation = "C:\Toolkit"
+
+    [scriptblock]$XperfStop = {
+        Set-Location -Path $xperfToolLocation
+        .\Xperf -d $DefaultLogDir"\Xperf_WaitAnalysis.ETL"
+    
+    }
+
+
     while (1) {
-        $errorMessage = Get-WinEvent -FilterHashtable $filter153 -MaxEvents 1 -ErrorAction SilentlyContinue
+        $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
         if ($errorMessage) {
             .$XperfStop
             Write-Host -ForegroundColor yellow "Xperf Collected."
@@ -241,8 +240,15 @@ function get-iSCSIData($LogPath, $ToolLocation) {
         .$XperfStart
         
        
-        $jobSN = Start-job -ScriptBlock $jobStorageNetwork -name "StorageNetwork"
-        $jobX = start-job  -ScriptBlock $jobXperf -name "Xperf"
+        $jobSN = Start-job -ScriptBlock $jobStorageNetwork -ArgumentList @($EventLogName, $EventProviderName, $EventLevel, $EventID)  -name "StorageNetwork"
+       
+        <#
+
+          For jobXperf param required
+          param($LogName,$ProviderName,$Level,$ID)
+       
+        #>
+        $jobX = start-job  -ScriptBlock $jobXperf -ArgumentList @($EventLogName, $EventProviderName, $EventLevel, $EventID) -name "Xperf"
 
         do {
                
@@ -266,10 +272,10 @@ function get-iSCSIData($LogPath, $ToolLocation) {
                         break;
                     }
                     else {
-                        Write-Host -ForegroundColor yellow "Throwing dummy Event 153 to stop the job $($jobSN.Name) & $($JobX.Name)."
+                        Write-Host -ForegroundColor yellow "Throwing dummy event $($EventID) to stop the job $($jobSN.Name) & $($JobX.Name)."
                         Write-Host -ForegroundColor yellow "Current State of the Job"
                         get-job | FT Id, Name, State
-                        write-eventlog -logname System -source "disk" -EntryType warning -EventID 153 -message "I am dummy!" 
+                        write-eventlog -logname $EventLogName -source $EventProviderName -EntryType $EventEntryType -EventID $EventID -message "I am dummy!" 
                         "Waiting for 5 seconds"
                         start-sleep -s 5
                         get-job | FT Id, Name, State
