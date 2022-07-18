@@ -39,14 +39,20 @@ $EventEntryType = "Warning"
 
 
 [scriptblock]$copyEventLogs = {
-    $systemLogPath = "C:\Windows\System32\winevt\Logs\System.evtx"
-    $applicationLogPath = "C:\Windows\System32\winevt\Logs\Application.evtx"
-
-    copy-item -Path $systemLogPath -Destination $DefaultLogDir -Force
-    copy-item -Path $applicationLogPath -Destination $DefaultLogDir -Force
-
+    
+    $timeStamp = get-date -Format "MM_dd_yyyy_HH_mm"
+   
+    $systemLogPath = $timeStamp + "_System.evtx"
+    $systemLogPath = $DefaultLogDir + "\"+  $systemLogPath
+    
+    $applicationLogPath = $timeStamp + "_Application.evtx"
+    $applicationLogPath = $DefaultLogDir + "\" + $applicationLogPath
+     
+    wevtutil.exe epl System $systemLogPath
+    wevtutil.exe epl Application $applicationLogPath
+    Get-Date -Format "dddd MM/dd/yyyy HH:mm K" | Out-File -FilePath  $DefaultLogDir"\TimeZone.txt"
+    (Get-TimeZone) | Out-File -FilePath $DefaultLogDir"\TimeZone.txt" -Append
 }
-
 
 #endregion
 

@@ -35,14 +35,22 @@ $EventEntryType = "Warning"
 #endregion
 
 #region EventLogs
-[scriptblock]$copyEventLogs ={
-   $systemLogPath = "C:\Windows\System32\winevt\Logs\System.evtx"
-   $applicationLogPath = "C:\Windows\System32\winevt\Logs\Application.evtx"
-
-   copy-item -Path $systemLogPath -Destination $DefaultLogDir -Force
-   copy-item -Path $applicationLogPath -Destination $DefaultLogDir -Force
-
+[scriptblock]$copyEventLogs = {
+    
+    $timeStamp = get-date -Format "MM_dd_yyyy_HH_mm"
+   
+    $systemLogPath = $timeStamp + "_System.evtx"
+    $systemLogPath = $DefaultLogDir + "\"+  $systemLogPath
+    
+    $applicationLogPath = $timeStamp + "_Application.evtx"
+    $applicationLogPath = $DefaultLogDir + "\" + $applicationLogPath
+     
+    wevtutil.exe epl System $systemLogPath
+    wevtutil.exe epl Application $applicationLogPath
+    Get-Date -Format "dddd MM/dd/yyyy HH:mm K" | Out-File -FilePath  $DefaultLogDir"\TimeZone.txt"
+    (Get-TimeZone) | Out-File -FilePath $DefaultLogDir"\TimeZone.txt" -Append
 }
+
 
 
 #endregion
@@ -77,7 +85,6 @@ $EventEntryType = "Warning"
 #endregion
 
 #region NetworkTrace
-
 [scriptblock]$NetworkTarceStart = {
      
     "Network Trace"
@@ -332,7 +339,7 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
     finally {
 
-        $logDirName = Get-Date -Format HH_mm_ss
+        $logDirName =  get-date -Format "MM_dd_yyyy_HH_mm"
         $nameHost = HOSTNAME
         $logDirName = $logDirName +"_"+ $nameHost
         New-Item -Name $logDirName -ItemType dir -Path $DefaultLogDir"\"
