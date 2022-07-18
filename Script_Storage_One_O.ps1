@@ -1,4 +1,5 @@
 <#
+Version 1.0
 This will capture
  .network dump
  .memory dump
@@ -197,7 +198,7 @@ $jobStorageNetwork = {
         .$NetworkTarceStop
         Write-Host "JobStorageNetwork -Exception Thrown" -ForegroundColor Green
         Write-Host $_.Exception.Message -ForegroundColor Red
-        Write-Host "Line number $($_.invocationInfo.scriptLineNumber)" -ForegroundColor red
+        Write-Host "Line at which exception occured => $($_.InvocationInfo.Line)" -ForegroundColor yellow
 
 
     
@@ -252,7 +253,7 @@ $jobXperf = {
         .$XperfStop
         Write-Host "jobXperf -Exception Thrown" -ForegroundColor Green
         Write-Host $_.Exception.Message -ForegroundColor Red
-        Write-Host "Line number at which exception occured $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+        Write-Host "Line at which exception occured => $($_.InvocationInfo.Line)" -ForegroundColor yellow
     }
 }#JobEnd
 
@@ -296,8 +297,8 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
                 1 { 
                     
-                    "Job {0} - status {1}" -f $(Get-job -Id $jobSN.Id).Name, (Get-job -id $jobSN.Id).State
-                    "Job {0} - status {1}" -f $(Get-job -Id $jobX.Id).Name, (Get-job -id $jobX.Id).State
+                    "Job {0} - status {1}" -f (Get-job -Id $jobSN.Id).Name, (Get-job -id $jobSN.Id).State
+                    "Job {0} - status {1}" -f (Get-job -Id $jobX.Id).Name, (Get-job -id $jobX.Id).State
                     receive-job -job $jobSN -keep
                     receive-job -job $jobX -keep
                   

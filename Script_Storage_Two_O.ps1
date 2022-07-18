@@ -1,4 +1,6 @@
 <#
+
+Version 2.0
 This will capture
  .network dump
  .memory dump
@@ -46,7 +48,7 @@ $EventEntryType = "Warning"
     $timeStamp = get-date -Format "MM_dd_yyyy_HH_mm"
    
     $systemLogPath = $timeStamp + "_System.evtx"
-    $systemLogPath = $DefaultLogDir + "\"+  $systemLogPath
+    $systemLogPath = $DefaultLogDir + "\" + $systemLogPath
     
     $applicationLogPath = $timeStamp + "_Application.evtx"
     $applicationLogPath = $DefaultLogDir + "\" + $applicationLogPath
@@ -161,16 +163,31 @@ $jobStorageNetwork = {
       
     }
 
-    while (1) {
-        $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
-        if ($errorMessage) {
-            .([scriptblock]::create($StorageTracesStop))
-            .([Scriptblock]::create($perfmonStop))
-            .([scriptblock]::create($NetworkTarceStop))
-            Write-Host -ForegroundColor yellow "Storage & network traces collected."
-            break;
-        }
-    }   
+    try {
+
+        while (1) {
+            $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
+            if ($errorMessage) {
+                .([scriptblock]::create($StorageTracesStop))
+                .([Scriptblock]::create($perfmonStop))
+                .([scriptblock]::create($NetworkTarceStop))
+                Write-Host -ForegroundColor yellow "Storage & network traces collected."
+                break;
+            }
+        }   
+
+    }
+    catch {
+
+        .([scriptblock]::create($StorageTracesStop))
+        .([Scriptblock]::create($perfmonStop))
+        .([scriptblock]::create($NetworkTarceStop))
+        Write-Host "Exception occured in jobStorageNetwork" -ForegroundColor Green
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Host "Line at which exception occured => $($_.InvocationInfo.Line)" -ForegroundColor yellow
+    }
+
+  
 
 }#JobEnd
 
@@ -203,14 +220,25 @@ $jobXperf = {
       
     }
 
-    while (1) {
-        $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
-        if ($errorMessage) {
-            .$XperfStop
-            Write-Host -ForegroundColor yellow "Xperf Collected."
-            break;
-        }
-    }   
+    try {
+        while (1) {
+            $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
+            if ($errorMessage) {
+                .$XperfStop
+                Write-Host -ForegroundColor yellow "Xperf Collected."
+                break;
+            }
+        } 
+    }
+    catch {
+        .$XperfStop
+        Write-Host "Exception occured in jobXperf" -ForegroundColor Green
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Host "Line at which exception occured => $($_.InvocationInfo.Line)" -ForegroundColor yellow
+
+    }
+
+   
 
 }#JobXperfEnd
 
@@ -253,7 +281,7 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
         do {
                
-            receive-job -job $jobSN
+       
             Write-Host -ForegroundColor Green "To check the job status press 1"
             Write-Host -ForegroundColor Green "To stop the traces press 2"
             
@@ -262,8 +290,10 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
                 1 { 
                     
-                    "Job {0} - status {1}" -f $(Get-job -Id $jobSN.Id).Name, (Get-job -id $jobSN.Id).State
-                    "Job {0} - status {1}" -f $(Get-job -Id $jobX.Id).Name, (Get-job -id $jobX.Id).State
+                    "Job {0} - status {1}" -f (Get-job -Id $jobSN.Id).Name, (Get-job -id $jobSN.Id).State 
+                    "Job {0} - status {1}" -f (Get-job -Id $jobX.Id).Name, (Get-job -id $jobX.Id).State
+                    receive-job -job $jobSN -Keep
+                    receive-job -job $jobX -Keep
                   
                     break 
                 }
@@ -294,8 +324,8 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
         }while ($command -ne 2)
 
-        @{StorageJob        = Receive-Job -job $jobSN
-            XperfJob        = Receive-Job -job $jobX
+        @{StorageJob        = Receive-Job -job $jobSN -Keep
+            XperfJob        = Receive-Job -job $jobX -keep
             StoragaJobState = (get-job -id $jobSN.id).State
             XperfJobState   = (get-job -id $jobX.id).State
              
