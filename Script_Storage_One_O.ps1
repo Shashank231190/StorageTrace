@@ -6,6 +6,8 @@ This will capture
  .Disk.sys trace
  .iSCSI trace
  .MPIO/DSM trace
+ .perfmon
+ .storport
  .System.evtx
  .Application.evtx
 #>
