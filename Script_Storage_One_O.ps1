@@ -42,7 +42,7 @@ $EventEntryType = "Warning"
     $timeStamp = get-date -Format "MM_dd_yyyy_HH_mm"
    
     $systemLogPath = $timeStamp + "_System.evtx"
-    $systemLogPath = $DefaultLogDir + "\"+  $systemLogPath
+    $systemLogPath = $DefaultLogDir + "\" + $systemLogPath
     
     $applicationLogPath = $timeStamp + "_Application.evtx"
     $applicationLogPath = $DefaultLogDir + "\" + $applicationLogPath
@@ -175,16 +175,33 @@ $jobStorageNetwork = {
         logman delete $CounterName
     }
 
-    while (1) {
-        $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
-        if ($errorMessage) {
-            .$StorageTracesStop
-            .$perfmonStop
-            .$NetworkTarceStop
-            Write-Host -ForegroundColor yellow "Storage & network traces collected."
-            break;
-        }
-    }   
+    try {
+
+        while (1) {
+            $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
+            if ($errorMessage) {
+                .$StorageTracesStop
+                .$perfmonStop
+                .$NetworkTarceStop
+                Write-Host -ForegroundColor yellow "Storage & network traces collected."
+                break;
+            }
+        }   
+
+
+    }
+    catch {
+
+        .$StorageTracesStop
+        .$perfmonStop
+        .$NetworkTarceStop
+        Write-Host "JobStorageNetwork -Exception Thrown" -ForegroundColor Green
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Host "Line number $($_.invocationInfo.scriptLineNumber)" -ForegroundColor red
+
+
+    
+    }
 
 }#JobEnd
 
@@ -219,17 +236,26 @@ $jobXperf = {
     
     }
 
+    try {
 
-    while (1) {
-        $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
-        if ($errorMessage) {
-            .$XperfStop
-            Write-Host -ForegroundColor yellow "Xperf Collected."
-            break;
-        }
-    }   
+        while (1) {
+            $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
+            if ($errorMessage) {
+                .$XperfStop
+                Write-Host -ForegroundColor yellow "Xperf Collected."
+                break;
+            }
+        }   
 
-}#JobXperfEnd
+    }
+    catch {
+        .$XperfStop
+        Write-Host "jobXperf -Exception Thrown" -ForegroundColor Green
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Host "Line number at which exception occured $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+    }
+}#JobEnd
+
 
 #endregion
 
@@ -240,8 +266,8 @@ function get-iSCSIData($LogPath, $ToolLocation) {
     #region try
     try {
 
-       $checkLogPath = Get-ChildItem $LogPath -ErrorAction Stop
-       $checkToolLocation =Get-ChildItem $ToolLocation -ErrorAction stop
+        $checkLogPath = Get-ChildItem $LogPath -ErrorAction Stop
+        $checkToolLocation = Get-ChildItem $ToolLocation -ErrorAction stop
         Write-Host -ForegroundColor yellow "Starting Traces"
         .$StorageTracesStart
         .$perfmonStart
@@ -261,7 +287,7 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
         do {
                
-            receive-job -job $jobSN
+           
             Write-Host -ForegroundColor Green "To check the job status press 1"
             Write-Host -ForegroundColor Green "To stop the traces press 2"
             
@@ -272,6 +298,8 @@ function get-iSCSIData($LogPath, $ToolLocation) {
                     
                     "Job {0} - status {1}" -f $(Get-job -Id $jobSN.Id).Name, (Get-job -id $jobSN.Id).State
                     "Job {0} - status {1}" -f $(Get-job -Id $jobX.Id).Name, (Get-job -id $jobX.Id).State
+                    receive-job -job $jobSN -keep
+                    receive-job -job $jobX -keep
                   
                     break 
                 }
@@ -302,8 +330,8 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
         }while ($command -ne 2)
 
-        @{StorageJob        = Receive-Job -job $jobSN
-            XperfJob        = Receive-Job -job $jobX
+        @{StorageJob        = Receive-Job -job $jobSN -keep
+            XperfJob        = Receive-Job -job $jobX -keep
             StoragaJobState = (get-job -id $jobSN.id).State
             XperfJobState   = (get-job -id $jobX.id).State
              
@@ -341,9 +369,9 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
     finally {
 
-        $logDirName =  get-date -Format "MM_dd_yyyy_HH_mm"
+        $logDirName = get-date -Format "MM_dd_yyyy_HH_mm"
         $nameHost = HOSTNAME
-        $logDirName = $logDirName +"_"+ $nameHost
+        $logDirName = $logDirName + "_" + $nameHost
         New-Item -Name $logDirName -ItemType dir -Path $DefaultLogDir"\"
         .$copyEventLogs
         set-location -Path $DefaultLogDir
