@@ -10,5 +10,5 @@ This script is spawning 2 seperate threads which may lead to high cpu utilizatio
 
 #Upcoming 
 	WPR Custom XML for GeneralProfile with controlled file size.
-	This profile will be merge in the script to leverage on the on box WPR capabilities, server 2016 onwards.
+	This profile will be merge in the script to leverage the on box WPR capabilities, server 2016 onwards.
 	
