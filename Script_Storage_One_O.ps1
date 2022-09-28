@@ -19,7 +19,7 @@ $DefaultDrive = "c:\"
 $logDir = "Logs"
 $DefaultLogDir = $DefaultDrive + $logDir
 $xperfToolLocation = "C:\Toolkit"
-if (!(test-path -path $DefaultLogDir)) {
+if (-not(test-path -path $DefaultLogDir)) {
     New-Item -Name $logDir -ItemType Directory -path $DefaultDrive -ErrorAction Stop
 
 }
@@ -34,6 +34,10 @@ $EventProviderName = "disk"
 $EventLevel = "3"
 $EventID = "153"
 $EventEntryType = "Warning"
+
+#optional parameters
+$secToWaitToStopScript = 20
+
 
 #endregion
 
@@ -143,17 +147,21 @@ $EventEntryType = "Warning"
 
 $jobStorageNetwork = {
 
-    param($LogName, $ProviderName, $Level, $ID)    
+    param($LogName, $ProviderName, $Level, $ID, $secToWait, $Log)  
+    
+    $startTime = (Get-Date).AddMinutes(1)  
 
     $filter = @{
 
         LogName      = $LogName
         ProviderName = $ProviderName
-        StartTime    = (Get-Date).AddMinutes(-1)
+        StartTime    = $startTime
         Level        = $Level
         ID           = $ID
       
     }
+
+    Write-host -ForegroundColor yellow "Storage Script will start monitoring the event at $startTime"
 
     [ScriptBlock]$StorageTracesStop = {
 
@@ -180,11 +188,18 @@ $jobStorageNetwork = {
 
         while (1) {
             $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
+        
             if ($errorMessage) {
+                
+                $sec = [int]$secToWait
+                Start-Sleep -Seconds $sec
                 .$StorageTracesStop
                 .$perfmonStop
                 .$NetworkTarceStop
                 Write-Host -ForegroundColor yellow "Storage & network traces collected."
+                $stopTime = get-date -format "dddd MM/dd/yyyy HH:mm:ss K"
+                Write-Output $stopTime | Out-File -FilePath $Log"\StorageJobStopTime.Log"
+                Write-host -ForegroundColor Red "Storage Script Stopped at $stopTime"
                 break;
             }
         }   
@@ -213,17 +228,21 @@ $jobStorageNetwork = {
 $jobXperf = {
 
 
-    param($LogName, $ProviderName, $Level, $ID)
+    param($LogName, $ProviderName, $Level, $ID, $secToWait, $Log)
+
+    $startTime = (get-date).AddMinutes(1)
 
     $filter = @{
 
         LogName      = $LogName
         ProviderName = $ProviderName
-        StartTime    = (get-date).AddMinutes(-1)
+        StartTime    = $startTime
         Level        = $Level
         ID           = $ID
       
     }
+
+    Write-host -ForegroundColor yellow "Xperf Script will start monitoring the event at $startTime"
 
 
     $DefaultDrive = "c:\"
@@ -242,8 +261,14 @@ $jobXperf = {
         while (1) {
             $errorMessage = Get-WinEvent -FilterHashtable $filter -MaxEvents 1 -ErrorAction SilentlyContinue
             if ($errorMessage) {
+
+                $sec = [int]$secToWait
+                Start-Sleep -Seconds $sec
                 .$XperfStop
                 Write-Host -ForegroundColor yellow "Xperf Collected."
+                $stopTime = get-date -format "dddd MM/dd/yyyy HH:mm:ss K"
+                Write-Output $stopTime | Out-File -FilePath $Log"\StorageXperfStopTime.Log"
+                Write-host -ForegroundColor red "Storage Script Stopped at $stopTime"
                 break;
             }
         }   
@@ -264,6 +289,8 @@ $jobXperf = {
 
 function get-iSCSIData($LogPath, $ToolLocation) {
 
+
+
     #region try
     try {
 
@@ -276,7 +303,7 @@ function get-iSCSIData($LogPath, $ToolLocation) {
         .$XperfStart
         
        
-        $jobSN = Start-job -ScriptBlock $jobStorageNetwork -ArgumentList @($EventLogName, $EventProviderName, $EventLevel, $EventID)  -name "StorageNetwork"
+        $jobSN = Start-job -ScriptBlock $jobStorageNetwork -ArgumentList @($EventLogName, $EventProviderName, $EventLevel, $EventID, $secToWaitToStopScript, $DefaultLogDir)  -name "StorageNetwork"
        
         <#
 
@@ -284,13 +311,13 @@ function get-iSCSIData($LogPath, $ToolLocation) {
           param($LogName,$ProviderName,$Level,$ID)
        
         #>
-        $jobX = start-job  -ScriptBlock $jobXperf -ArgumentList @($EventLogName, $EventProviderName, $EventLevel, $EventID) -name "Xperf"
+        $jobX = start-job  -ScriptBlock $jobXperf -ArgumentList @($EventLogName, $EventProviderName, $EventLevel, $EventID, $secToWaitToStopScript, $DefaultLogDir) -name "Xperf"
 
         do {
                
            
             Write-Host -ForegroundColor Green "To check the job status press 1"
-            Write-Host -ForegroundColor Green "To stop the traces press 2"
+            Write-Host -ForegroundColor Green "To stop or terminate the script press 2"
             
             $command = read-host "Select option"
             switch ($command) {
@@ -314,13 +341,23 @@ function get-iSCSIData($LogPath, $ToolLocation) {
                         Write-Host -ForegroundColor yellow "Current State of the Job"
                         get-job | FT Id, Name, State
                         write-eventlog -logname $EventLogName -source $EventProviderName -EntryType $EventEntryType -EventID $EventID -message "I am dummy!" 
-                        "Waiting for 5 seconds"
+                        "Waiting for few seconds and checking job status.."
                         start-sleep -s 5
                         get-job | FT Id, Name, State
+                        $val = 's'
+                        $val = read-host "Stopping the trace forcefully [y/n]"
+                        if ($val -eq 'y') {
+                            throw "Stop ForceFully"
+                            break;
+                        }
+                        else {
+                            $command = 1
+                        }
+                        
                     }
 
 
-                    break;
+                
                 }
 
                 default { Write-Host -ForegroundColor red "Select the Valid Option" }
@@ -330,22 +367,6 @@ function get-iSCSIData($LogPath, $ToolLocation) {
 
 
         }while ($command -ne 2)
-
-        @{StorageJob        = Receive-Job -job $jobSN -keep
-            XperfJob        = Receive-Job -job $jobX -keep
-            StoragaJobState = (get-job -id $jobSN.id).State
-            XperfJobState   = (get-job -id $jobX.id).State
-             
-        } | export-clixml -path $DefaultLogDir"\diag.xml"
-
-          
-        receive-job -job  $jobSN
-        receive-job -job $jobX
-        get-job | remove-job -force
-
-         
-        
-
     }
     #endregion
 
@@ -360,7 +381,18 @@ function get-iSCSIData($LogPath, $ToolLocation) {
         .$NetworkTarceStop
         .$XperfStop
         .$perfmonStop
+        @{StorageJob        = Receive-Job -job $jobSN -keep
+            XperfJob        = Receive-Job -job $jobX -keep
+            StoragaJobState = (get-job -id $jobSN.id).State
+            XperfJobState   = (get-job -id $jobX.id).State
+             
+        } | export-clixml -path $DefaultLogDir"\diagCatch.xml"
+
+          
+        receive-job -job  $jobSN
+        receive-job -job $jobX
         get-job | remove-job -force
+ 
 
     }
     #endregion
@@ -369,6 +401,18 @@ function get-iSCSIData($LogPath, $ToolLocation) {
     #region finally
 
     finally {
+
+        @{StorageJob        = Receive-Job -job $jobSN -keep
+            XperfJob        = Receive-Job -job $jobX -keep
+            StoragaJobState = (get-job -id $jobSN.id).State
+            XperfJobState   = (get-job -id $jobX.id).State
+             
+        } | export-clixml -path $DefaultLogDir"\diagFinally.xml"
+
+          
+        receive-job -job  $jobSN
+        receive-job -job $jobX
+        get-job | remove-job -force
 
         $logDirName = get-date -Format "MM_dd_yyyy_HH_mm"
         $nameHost = HOSTNAME
